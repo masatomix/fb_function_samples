@@ -22,9 +22,45 @@ export const hello = functions.https.onRequest((req, res) => {
   res.send('Hello world.')
 })
 
-export const echo = functions.https.onRequest((request, response) => {
+function getIdToken(request, response) {
+  if (!request.headers.authorization) {
+    response.status(401).send('Authorization ヘッダが存在しません。')
+    return
+  }
+  const match = request.headers.authorization.match(/^Bearer (.*)$/)
+  if (match) {
+    const idToken = match[1]
+    return idToken
+  } else {
+    response
+      .status(401)
+      .send('Authorization ヘッダから、Bearerトークンを取得できませんでした。')
+    return
+  }
+}
+
+export const echo = functions.https.onRequest(async (request, response) => {
   const task = request.body
   console.log(JSON.stringify(task))
 
-  response.send(JSON.stringify(task))
+  const idToken = getIdToken(request, response) // Bearerトークン取れるかチェック
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken)
+
+    // ココにロジック
+    console.log(decodedToken.uid) // Firebase Authentication 上のユーザUID
+    response.send(JSON.stringify(task))
+  } catch (error) {
+    console.log(error.message)
+    response.status(401).send(error.message)
+  }
+})
+
+export const echo_onCall = functions.https.onCall((data, context) => {
+  console.log('data: ' + JSON.stringify(data))
+  console.log('context.auth: ' + JSON.stringify(context.auth))
+  if (context.auth) {
+    console.log('context.auth.uid: ' + context.auth.uid)
+  }
+  return data
 })
