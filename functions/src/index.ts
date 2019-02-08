@@ -18,18 +18,19 @@ import * as functions from 'firebase-functions'
 import * as admin from 'firebase-admin'
 admin.initializeApp()
 
-
 export const hello = functions.https.onRequest((req, res) => {
-  res.send("Hello world.")
+  res.send('Hello world.')
 })
 
 export const hello_auth = functions.https.onCall((data, context) => {
-  console.log("data: "+JSON.stringify(data))
-  console.log("context.auth: "+JSON.stringify(context.auth))
-  if(context.auth){
-    console.log("context.auth.uid: "+ context.auth.uid)
+  console.log('data: ' + JSON.stringify(data))
+  console.log('context.auth: ' + JSON.stringify(context.auth))
+  if (context.auth) {
+    console.log('context.auth.uid: ' + context.auth.uid)
   }
-  console.log("context.instanceIdToken: "+JSON.stringify(context.instanceIdToken))
+  console.log(
+    'context.instanceIdToken: ' + JSON.stringify(context.instanceIdToken)
+  )
 
   // const auth = context.auth
   // console.log(JSON.stringify(auth))
@@ -39,16 +40,15 @@ export const hello_auth = functions.https.onCall((data, context) => {
   return data
 })
 
-
 export const addTask = functions.https.onRequest((req, res) => {
   const task = req.body
   const firestore = admin.firestore()
-  const ref = firestore.collection("todos")
- 
+  const ref = firestore.collection('todos')
+
   ref.add(task).then(docref => {
     task.id = docref.id
     ref.doc(docref.id).set(task) // idを入れて再度更新
-    res.send("Hello from Firebase!")
+    res.send('Hello from Firebase!')
   })
 })
 
@@ -95,11 +95,22 @@ export const echo_onCall = functions.https.onCall((data, context) => {
   return data
 })
 
+import * as express from 'express'
+import userRouter from './userRouter'
+import companyRouter from './companyRouter'
+import railRouter from './railRouter'
+
+const app = express()
+app.use('/users', userRouter)
+app.use('/companies', companyRouter)
+app.use('/rails', railRouter)
+
+export const api = functions.https.onRequest(app)
+
 import * as logic from './logic'
 
 export const helloPubSub = functions.pubsub
-  .topic('testTopic')
+  .topic('fugaTopic')
   .onPublish(message => {
     logic.want_to_execute()
   })
-
