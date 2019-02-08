@@ -94,3 +94,12 @@ export const echo_onCall = functions.https.onCall((data, context) => {
   }
   return data
 })
+
+import * as logic from './logic'
+
+export const helloPubSub = functions.pubsub
+  .topic('testTopic')
+  .onPublish(message => {
+    logic.want_to_execute()
+  })
+
