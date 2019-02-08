@@ -1,12 +1,11 @@
 import * as express from "express";
-import * as mysql from "mysql";
-import * as util from "util";
+import * as mysql from "promise-mysql";
 import config from "./config";
 
 const router = express.Router();
 
 let mysqlPool = mysql.createPool(config);
-mysqlPool.query = util.promisify(mysqlPool.query);
+// mysqlPool.query = util.promisify(mysqlPool.query);
 
 router
   // findAll
@@ -15,7 +14,7 @@ router
   .get("/", async (req, res) => {
     console.log("find all user start.");
     try {
-      const rows = await mysqlPool.query("select * from  USER_MASTER;");
+      const rows:any = await mysqlPool.query("select * from  USER_MASTER;");
       if (rows.length === 0) {
         res.status(404).send();
         return;
@@ -83,7 +82,7 @@ router
 router.get("/:company_cd/:login_id", async (req, res) => {
   console.log("find by pk start.");
   try {
-    const rows = await mysqlPool.query(
+    const rows:any = await mysqlPool.query(
       "select * from  USER_MASTER where COMPANY_CD = ? and LOGIN_ID = ? ;",
       [req.params.company_cd, req.params.login_id]
     );

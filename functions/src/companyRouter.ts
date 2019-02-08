@@ -1,12 +1,12 @@
 import * as express from "express";
-import * as mysql from "mysql";
-import * as util from "util";
+import * as mysql from "promise-mysql";
+
 import config from "./config";
 
 const router = express.Router();
 
 let mysqlPool = mysql.createPool(config);
-mysqlPool.query = util.promisify(mysqlPool.query);
+
 
 router
   // findAll
@@ -15,7 +15,7 @@ router
   .get("/", async (req, res) => {
     console.log("find all");
     try {
-      const rows = await mysqlPool.query("select * from COMPANY_MASTER;");
+      const rows:any = await mysqlPool.query("select * from COMPANY_MASTER;");
       if (rows.length === 0) {
         res.status(404).send();
         return;
@@ -76,7 +76,7 @@ router
 router.get("/:company_cd/", async (req, res) => {
   console.log("find by pk");
   try {
-    const rows = await mysqlPool.query(
+    const rows:any = await mysqlPool.query(
       "select * from  COMPANY_MASTER where COMPANY_CD = ?",
       [req.params.company_cd]
     );
