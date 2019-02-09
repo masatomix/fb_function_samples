@@ -86,31 +86,37 @@ export const echo = functions.https.onRequest(async (request, response) => {
   }
 })
 
-export const echo_onCall = functions.https.onCall((data, context) => {
-  console.log('data: ' + JSON.stringify(data))
-  console.log('context.auth: ' + JSON.stringify(context.auth))
-  if (context.auth) {
-    console.log('context.auth.uid: ' + context.auth.uid)
-  }
-  return data
-})
+// export const echo_onCall = functions.https.onCall((data, context) => {
+//   console.log('data: ' + JSON.stringify(data))
+//   console.log('context.auth: ' + JSON.stringify(context.auth))
+//   if (context.auth) {
+//     console.log('context.auth.uid: ' + context.auth.uid)
+//   }
+//   return data
+// })
 
 import * as express from 'express'
 import userRouter from './userRouter'
 import companyRouter from './companyRouter'
 import railRouter from './railRouter'
+import railUtils from './railUtils'
 
 const app = express()
+
 app.use('/users', userRouter)
 app.use('/companies', companyRouter)
 app.use('/rails', railRouter)
 
 export const api = functions.https.onRequest(app)
 
-import * as logic from './logic'
-
-export const helloPubSub = functions.pubsub
-  .topic('fugaTopic')
+export const store_rail_info = functions.pubsub
+  .topic('store_rail_info')
   .onPublish(message => {
-    logic.want_to_execute()
+    railUtils.rail_detail_insert()
+  })
+
+export const check_rail_info = functions.pubsub
+  .topic('check_rail_info')
+  .onPublish(message => {
+    railUtils.rail_check()
   })
