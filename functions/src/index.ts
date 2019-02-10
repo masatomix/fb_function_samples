@@ -18,40 +18,6 @@ import * as functions from 'firebase-functions'
 import * as admin from 'firebase-admin'
 admin.initializeApp()
 
-export const hello = functions.https.onRequest((req, res) => {
-  res.send('Hello world.')
-})
-
-export const hello_auth = functions.https.onCall((data, context) => {
-  console.log('data: ' + JSON.stringify(data))
-  console.log('context.auth: ' + JSON.stringify(context.auth))
-  if (context.auth) {
-    console.log('context.auth.uid: ' + context.auth.uid)
-  }
-  console.log(
-    'context.instanceIdToken: ' + JSON.stringify(context.instanceIdToken)
-  )
-
-  // const auth = context.auth
-  // console.log(JSON.stringify(auth))
-  // console.log(JSON.stringify(context.instanceIdToken))
-  // console.log(JSON.stringify(context.rawRequest))
-
-  return data
-})
-
-export const addTask = functions.https.onRequest((req, res) => {
-  const task = req.body
-  const firestore = admin.firestore()
-  const ref = firestore.collection('todos')
-
-  ref.add(task).then(docref => {
-    task.id = docref.id
-    ref.doc(docref.id).set(task) // idを入れて再度更新
-    res.send('Hello from Firebase!')
-  })
-})
-
 function getIdToken(request, response) {
   if (!request.headers.authorization) {
     response.status(401).send('Authorization ヘッダが存在しません。')
@@ -86,31 +52,28 @@ export const echo = functions.https.onRequest(async (request, response) => {
   }
 })
 
-export const echo_onCall = functions.https.onCall((data, context) => {
-  console.log('data: ' + JSON.stringify(data))
-  console.log('context.auth: ' + JSON.stringify(context.auth))
-  if (context.auth) {
-    console.log('context.auth.uid: ' + context.auth.uid)
-  }
-  return data
-})
-
 import * as express from 'express'
 import userRouter from './userRouter'
 import companyRouter from './companyRouter'
 import railRouter from './railRouter'
+import railUtils from './railUtils'
 
 const app = express()
+
 app.use('/users', userRouter)
 app.use('/companies', companyRouter)
 app.use('/rails', railRouter)
 
 export const api = functions.https.onRequest(app)
 
-import * as logic from './logic'
-
-export const helloPubSub = functions.pubsub
-  .topic('fugaTopic')
+export const store_rail_info = functions.pubsub
+  .topic('store_rail_info')
   .onPublish(message => {
-    logic.want_to_execute()
+    railUtils.rail_detail_insert()
+  })
+
+export const check_rail_info = functions.pubsub
+  .topic('check_rail_info')
+  .onPublish(message => {
+    railUtils.rail_check()
   })
