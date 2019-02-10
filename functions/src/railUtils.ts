@@ -8,6 +8,8 @@ import * as moment from 'moment-timezone'
 
 let pool = mysql.createPool(config)
 
+const excludeList = ['日高本線', '室蘭本線', '呉線', '芸備線'] // いつも遅延してる？ぽいので、まあ除外しちゃう
+
 const me = {
   /**
    * 鉄道遅延情報WEBサイトにアクセスして、取得結果をDBに格納する。
@@ -35,22 +37,25 @@ const me = {
       // 今テーブルを全消し
       await connection.query('delete from DELAY_RAIL_NEW')
       for (const delay_rail_info of body) {
-        // 今テーブルと、ALLテーブルに全件入れる
-        await connection.query(
-          'insert into DELAY_RAIL_NEW set ?',
-          delay_rail_info
-        )
-
-        // JSONの情報はALLテーブルにあれば、Insertしない。なければ新規なのでInsert
-        const rows = await connection.query(
-          'select * from  DELAY_RAIL_ALL where name = ? and lastupdate_gmt = ? ;',
-          [delay_rail_info['name'], delay_rail_info['lastupdate_gmt']]
-        )
-        if (rows.length === 0) {
+        // 除外リストにないときだけ
+        if (!excludeList.some(value => value === delay_rail_info['name'])) {
+          // 今テーブルと、ALLテーブルに全件入れる
           await connection.query(
-            'insert into DELAY_RAIL_ALL set ?',
+            'insert into DELAY_RAIL_NEW set ?',
             delay_rail_info
           )
+
+          // JSONの情報はALLテーブルにあれば、Insertしない。なければ新規なのでInsert
+          const rows = await connection.query(
+            'select * from  DELAY_RAIL_ALL where name = ? and lastupdate_gmt = ? ;',
+            [delay_rail_info['name'], delay_rail_info['lastupdate_gmt']]
+          )
+          if (rows.length === 0) {
+            await connection.query(
+              'insert into DELAY_RAIL_ALL set ?',
+              delay_rail_info
+            )
+          }
         }
       }
       // 全部出来たらコミット
@@ -75,34 +80,31 @@ const me = {
     // const rail_infos = JSON.parse(fs.readFileSync('new.json', 'utf8'))
     // const rail_infos_prev = JSON.parse(fs.readFileSync('prev.json', 'utf8'))
 
-    if (_utils.compare(rail_infos, rail_infos_prev)) {
+    if (_utils.equals(rail_infos, rail_infos_prev)) {
       console.log('差分ナシ!')
     } else {
       console.log('差分アリ!')
       const message = this.createMessage(rail_infos)
-      console.log('-----------------------------')
       console.log(message)
-      console.log('-----------------------------')
-
       this.sendSlack(message)
     }
   },
 
   createMessage(rail_infos: Array<any>) {
-    // 要修正。文字列操作。Timezoneも。
     const internal_message = rail_infos
       .map(element => {
-        return element.name + ' ( ' + element.lastupdate_gmt + ' )'
+        const lastupdateStr = moment(element.lastupdate_gmt * 1000)
+          .tz('Asia/Tokyo')
+          .format('HH:mm')
+        return `${element.name} (${lastupdateStr})`
       })
-      .reduce((prev, current) => prev + '\n' + current)
+      .reduce((prev, current) => prev + '\n' + current, '')
+    // 最後の''は、空配列のときに初期値が不定となるので''を初期値とする、の意味
 
-    // ヒアドキュメントでの書き直しは完了/Timezone設定も！
     const now = moment()
-    now.tz('Asia/Tokyo')
-    
-    const nowStr = now.format('YYYY/MM/DD HH:mm:ss')
+    const nowStr = now.tz('Asia/Tokyo').format('YYYY/MM/DD HH:mm')
 
-    let message = `電車運行情報 ${nowStr}
+    let message = `電車運行情報 ${nowStr} 時点
 
 ${internal_message}
 
@@ -136,7 +138,7 @@ https://rti-giken.jp/fhc/api/train_tetsudo/
 }
 
 /**
- * ココでつかうUtilsを集めたメソッド
+ * ココでつかうUtilsを集めたメソッド。exportしないので外からつかえない(でイイんだよね)。。
  */
 const _utils = {
   /**
@@ -144,7 +146,7 @@ const _utils = {
    * @param rail_infos
    * @param rail_infos_prev
    */
-  compare(rail_infos: Array<any>, rail_infos_prev: Array<any>) {
+  equals(rail_infos: Array<any>, rail_infos_prev: Array<any>) {
     // サイズ違いはそもそもDIFFあり
     if (rail_infos.length !== rail_infos_prev.length) {
       console.log(
@@ -173,17 +175,29 @@ const _utils = {
     return true
   },
 
+  /**
+   * 引数のRailInfoオブジェクト(rail_info)が、rail_infos_prevのリストに含まれているかをTrue/Falseで。
+   * @param rail_info
+   * @param rail_infos_prev
+   */
   containsRailInfo(rail_info, rail_infos_prev: Array<any>) {
-    // 要修正。もすこしJSらしく
-    for (const rail_info_prev of rail_infos_prev) {
-      if (this.compareRailInfo(rail_info, rail_info_prev)) {
-        return true
-      }
+    if (
+      // どれか一つにでも、一致してたら
+      rail_infos_prev.some(rail_info_prev =>
+        this.equalsRailInfo(rail_info, rail_info_prev)
+      )
+    ) {
+      return true
     }
     return false
   },
 
-  compareRailInfo(rail_info1, rail_info2) {
+  /**
+   * 引数のRailInfoオブジェクトを比較する。name 属性がおなじかどうか。
+   * @param rail_info1
+   * @param rail_info2
+   */
+  equalsRailInfo(rail_info1, rail_info2) {
     return (
       // rail_info1.name === rail_info2.name &&
       // rail_info1.lastupdate_gmt === rail_info2.lastupdate_gmt
@@ -203,7 +217,7 @@ const _utils = {
     }
   },
 
-  doRequest: function(option) {
+  doRequest(option) {
     return new Promise((resolve, reject) => {
       request(option, (error, response, body) => {
         if (!error && response.statusCode == 200) {
