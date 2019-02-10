@@ -1,6 +1,8 @@
 import * as request from 'request'
 import * as mysql from 'promise-mysql'
 import config from './config'
+import slackConfig from './slackConfig'
+import * as moment from 'moment'
 
 // import * as fs from 'fs'
 
@@ -77,7 +79,44 @@ export default {
       console.log('差分ナシ!')
     } else {
       console.log('差分アリ!')
+      const message = this.createMessage(rail_infos)
+      this.sendSlack(message)
     }
+  },
+
+  createMessage(rail_infos: Array<any>) {
+    // 要修正。文字列操作。Timezoneも。
+    const message = rail_infos
+      .map(element => {
+        return element.name + ' ( ' + element.lastupdate_gmt + ' )'
+      })
+      .reduce((prev, current) => prev + '\n' + current)
+
+    console.log(message)
+    const now = moment()
+    const nowStr = now.format('YYYY/MM/DD HH:mm:ss')
+    return nowStr + '\n' + message
+  },
+
+  sendSlack(message) {
+    const option = {
+      url: slackConfig.url,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      json: { text: message, channel: '#rail_info' }
+    }
+    request(option, (error, response, body) => {
+      if (error) {
+        console.log('error:', error)
+        return
+      }
+      if (response && body) {
+        console.log('status Code:', response && response.statusCode)
+        console.log(body)
+      }
+    })
   }
 }
 
@@ -104,6 +143,7 @@ const _utils = {
     let matchFlag: boolean = false
 
     // サイズがおなじ場合、now側で、For文回す
+    // 要修正。もすこしJSらしく
     for (const rail_info of rail_infos) {
       matchFlag = this.containsRailInfo(rail_info, rail_infos_prev)
       // containsRailInfo をくぐり抜けて、Falseだったら 一致するものがなかったということ
@@ -119,6 +159,7 @@ const _utils = {
   },
 
   containsRailInfo(rail_info, rail_infos_prev: Array<any>) {
+    // 要修正。もすこしJSらしく
     for (const rail_info_prev of rail_infos_prev) {
       if (this.compareRailInfo(rail_info, rail_info_prev)) {
         return true
@@ -129,8 +170,9 @@ const _utils = {
 
   compareRailInfo(rail_info1, rail_info2) {
     return (
-      rail_info1.name === rail_info2.name &&
-      rail_info1.lastupdate_gmt === rail_info2.lastupdate_gmt
+      // rail_info1.name === rail_info2.name &&
+      // rail_info1.lastupdate_gmt === rail_info2.lastupdate_gmt
+      rail_info1.name === rail_info2.name
     )
   },
 
