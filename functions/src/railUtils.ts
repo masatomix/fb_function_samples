@@ -91,6 +91,7 @@ const me = {
   },
 
   createMessage(rail_infos: Array<any>) {
+    // rail_infos の要素を文字列化して、連結する
     const internal_message = rail_infos
       .map(element => {
         const lastupdateStr = moment(element.lastupdate_gmt * 1000)
@@ -104,7 +105,7 @@ const me = {
     const now = moment()
     const nowStr = now.tz('Asia/Tokyo').format('YYYY/MM/DD HH:mm')
 
-    let message = `電車運行情報 ${nowStr} 時点
+    const message = `電車運行情報 ${nowStr} 時点
 
 ${internal_message}
 
@@ -157,22 +158,18 @@ const _utils = {
       return false
     }
 
-    let matchFlag: boolean = false
-
-    // サイズがおなじ場合、now側で、For文回す
-    // 要修正。もすこしJSらしく
-    for (const rail_info of rail_infos) {
-      matchFlag = this.containsRailInfo(rail_info, rail_infos_prev)
-      // containsRailInfo をくぐり抜けて、Falseだったら 一致するものがなかったということ
+    // サイズがおなじ場合、now側(rail_infos)で、For文回す
+    // 全てのrail_info において、containsRailInfo がtrueだったら -> true
+    return rail_infos.every(rail_info => {
+      const matchFlag = this.containsRailInfo(rail_info, rail_infos_prev)
       if (!matchFlag) {
         console.log(
           'newにある[%s]に一致するレコードが見つからない',
           rail_info.name
         )
-        return false
       }
-    }
-    return true
+      return matchFlag
+    })
   },
 
   /**
