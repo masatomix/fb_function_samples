@@ -2,13 +2,13 @@ import * as request from 'request'
 import * as mysql from 'promise-mysql'
 import config from './config'
 import slackConfig from './slackConfig'
-import * as moment from 'moment'
+import * as moment from 'moment-timezone'
 
 // import * as fs from 'fs'
 
 let pool = mysql.createPool(config)
 
-export default {
+const me = {
   /**
    * 鉄道遅延情報WEBサイトにアクセスして、取得結果をDBに格納する。
    * それまで持っていたのはprevテーブルに入れて、あとで差分チェックが出来るようにする
@@ -80,22 +80,37 @@ export default {
     } else {
       console.log('差分アリ!')
       const message = this.createMessage(rail_infos)
+      console.log('-----------------------------')
+      console.log(message)
+      console.log('-----------------------------')
+
       this.sendSlack(message)
     }
   },
 
   createMessage(rail_infos: Array<any>) {
     // 要修正。文字列操作。Timezoneも。
-    const message = rail_infos
+    const internal_message = rail_infos
       .map(element => {
         return element.name + ' ( ' + element.lastupdate_gmt + ' )'
       })
       .reduce((prev, current) => prev + '\n' + current)
 
-    console.log(message)
+    // ヒアドキュメントでの書き直しは完了/Timezone設定も！
     const now = moment()
+    now.tz('Asia/Tokyo')
+    
     const nowStr = now.format('YYYY/MM/DD HH:mm:ss')
-    return nowStr + '\n' + message
+
+    let message = `電車運行情報 ${nowStr}
+
+${internal_message}
+
+(カッコは更新時刻)
+https://www.tetsudo.com/traffic/
+https://rti-giken.jp/fhc/api/train_tetsudo/
+`
+    return message
   },
 
   sendSlack(message) {
@@ -201,6 +216,8 @@ const _utils = {
   }
 }
 
-import util from './railUtils'
+export default me
 
-util.rail_check()
+if (!module.parent) {
+  me.rail_check()
+}
