@@ -14,8 +14,9 @@ router.get('/', async (req, res) => {
   const code = req.query.code
 
   // errorでリダイレクトされたとき
+  // ユーザがキャンセルしたときはココなので、そこそこちゃんと実装しないと。。
   if (req.query.error) {
-    res.setHeader('ContentType', 'text/plain;charset=UTF-8')
+    res.setHeader('Content-Type', 'text/plain;charset=UTF-8')
     const message = `
 error: ${req.query.error}
 error_uri: ${req.query.error_uri}
@@ -27,25 +28,26 @@ error_description: ${req.query.error_description}
 
   // codeがなかったとき、まずは認可画面へ遷移
   if (!code) {
+    const randomValue = getRandomString()
+    console.log('randomValue: ' + randomValue)
+
     const authorization_endpoint_uri = [
       oauthConfig.authorization_endpoint,
       '?client_id=',
       oauthConfig.client_id,
       '&redirect_uri=',
       oauthConfig.redirect_uri,
+      '&state=',
+      randomValue,
+      '&response_type=code',
       '&scope=',
       oauthConfig.scope
     ].join('')
 
-    // const authorization_endpoint_uri = `${
-    //   oauthConfig.authorization_endpoint
-    // }?client_id=${oauthConfig.client_id}&redirect_uri=${
-    //   oauthConfig.redirect_uri
-    // }&scope=${oauthConfig.scope}`
+    addCookie(res, 'state', randomValue)
     res.redirect(authorization_endpoint_uri)
   } else {
-    // コードがあるときToken取得処理
-    // const state = req.query.state
+    checkCSRF(req, res)
 
     const formParams = {
       redirect_uri: oauthConfig.redirect_uri,
@@ -97,13 +99,9 @@ error_description: ${req.query.error_description}
     } finally {
       pool.releaseConnection(connection)
     }
-
     console.log(body)
   }
-
-  // 認可トークンから、Slackへトークンをもらいに行く処理を実装して、DBへ保存、とか。
   console.log('token End.')
-  res.send('完了！')
 })
 
 function doRequest(option) {
@@ -116,6 +114,33 @@ function doRequest(option) {
       }
     })
   })
+}
+
+function getRandomString() {
+  var S = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  var N = 50
+  const randomValue = Array.from(Array(N))
+    .map(() => S[Math.floor(Math.random() * S.length)])
+    .join('')
+  return randomValue
+}
+
+function checkCSRF(req, res) {
+  const state = req.query.state
+  const sessionState = req.cookies.state || ''
+  console.log('requestState: ' + state)
+  console.log('sessionState: ' + sessionState)
+  if (state !== sessionState) {
+    res
+      .status(400)
+      .send('前回のリクエストと今回のstate値が一致しないため、エラー。')
+  }
+}
+
+function addCookie(res, key, value) {
+  const expiresIn = 60 * 60 * 24 * 5 * 1000
+  const options = { maxAge: expiresIn, httpOnly: true, secure: true }
+  res.cookie(key, value, options)
 }
 
 export default router

@@ -53,6 +53,7 @@ export const echo = functions.https.onRequest(async (request, response) => {
 })
 
 import * as express from 'express'
+import * as cookieParser from 'cookie-parser'
 import userRouter from './userRouter'
 import companyRouter from './companyRouter'
 import railRouter from './railRouter'
@@ -60,11 +61,13 @@ import oauthRouter from './oauthRouter'
 import railUtils from './railUtils'
 
 const app = express()
+app.use(cookieParser())
 
 app.use('/users', userRouter)
 app.use('/companies', companyRouter)
 app.use('/rails', railRouter)
 app.use('/oauth', oauthRouter)
+
 
 export const api = functions.https.onRequest(app)
 
