@@ -8,13 +8,34 @@ let pool = mysql.createPool(config)
 
 const router = express.Router()
 
+/**
+ * Slack追加、ボタンをクリックしたときにまず呼ばれるリンク。リクエストパラメタに
+ * user=xxxって FirebaseのユーザIDが渡ってくる想定で、Cookieに入れる指示をして、'./'へリダイレクト。
+ */
+router.get('/addCookie', (req, res) => {
+  addCookie(res, 'user', req.query.user)
+  res.redirect('./')
+})
+
+/**
+ * こっちが本丸のSlack追加リンク。
+ * リクエストパラメタに認可コード(code=xxxx)がついていない場合は、
+ * CSRFのstateパラメタをはじめとする様々なパラメタをつけて、Slackの認可サイトへ302リダイレクト。
+ *
+ * リクエストパラメタに、認可コードがついている場合は、Slackサイトでユーザが認可をしたってことで、
+ * その認可コードを使って、認可サーバ(Slack)へアクセストークンを取得しに行く。
+ * そのアクセストークンを取りに行くときは、ClientSecretをつけて認証をおこなう、認可コードグラント方式のOAuthになってます
+ *
+ * アクセストークンを取れた際には、/addCookieのアクセス時に指示されたユーザ情報がcookieにセットされて登ってきているはずなので
+ * そのユーザ情報と、アクセストークンを対にして、データベースへ格納している。
+ */
 router.get('/', async (req, res) => {
   console.log('token start.')
 
   const code = req.query.code
 
   // errorでリダイレクトされたとき
-  // ユーザがキャンセルしたときはココなので、そこそこちゃんと実装しないと。。
+  // ユーザがキャンセルしたときはココなので、そこそこちゃんと実装しないと。。(今んとこ適当実装)
   if (req.query.error) {
     res.setHeader('Content-Type', 'text/plain;charset=UTF-8')
     const message = `
@@ -49,6 +70,8 @@ error_description: ${req.query.error_description}
   } else {
     checkCSRF(req, res)
 
+    const fbUser = req.cookies.user
+
     const formParams = {
       redirect_uri: oauthConfig.redirect_uri,
       client_id: oauthConfig.client_id,
@@ -69,6 +92,7 @@ error_description: ${req.query.error_description}
 
     const body: any = await doRequest(options)
     const instance = {
+      auth_user_id: fbUser,
       team_id: body.team_id,
       user_id: body.user_id,
       scope: body.scope,
@@ -77,18 +101,18 @@ error_description: ${req.query.error_description}
       body: JSON.stringify(body)
     }
 
-    let connection = await pool.getConnection()
+    const connection = await pool.getConnection()
     try {
       await connection.beginTransaction()
       await connection.query(
-        'delete from  access_token where team_id = ? and user_id = ? and scope = ? ;',
-        [body.team_id, body.user_id, body.scope]
+        'delete from  access_token where auth_user_id = ? ',
+        [fbUser]
       )
       await connection.query('insert into access_token set ?', instance)
 
       const rows = await connection.query(
-        'select * from  access_token where team_id = ? and user_id = ? and scope = ? ;',
-        [body.team_id, body.user_id, body.scope]
+        'select * from  access_token where auth_user_id = ? ',
+        [fbUser]
       )
       connection.commit()
       res.status(201).json(rows[0])

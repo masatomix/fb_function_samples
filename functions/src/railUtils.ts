@@ -1,7 +1,6 @@
 import * as request from 'request'
 import * as mysql from 'promise-mysql'
 import config from './config'
-import slackConfig from './slackConfig'
 import * as moment from 'moment-timezone'
 
 // import * as fs from 'fs'
@@ -86,8 +85,24 @@ const me = {
       console.log('差分アリ!')
       const message = this.createMessage(rail_infos)
       console.log(message)
-      this.sendSlack(message)
+
+      const tokens = await this.getTokens()
+      this.sendSlack(message, tokens)
     }
+  },
+
+  async getTokens() {
+    let tokens = []
+    let connection = await pool.getConnection()
+    try {
+      const rows = await connection.query(
+        'select access_token from access_token'
+      )
+      tokens = rows.map(row=>row.access_token)
+    } catch (err) {
+      console.log('err: ' + err)
+    }
+    return tokens
   },
 
   createMessage(rail_infos: Array<any>) {
@@ -116,24 +131,27 @@ https://rti-giken.jp/fhc/api/train_tetsudo/
     return message
   },
 
-  sendSlack(message) {
-    const option = {
-      url: slackConfig.url,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      json: { text: message, channel: '#rail_info' }
-    }
-    request(option, (error, response, body) => {
-      if (error) {
-        console.log('error:', error)
-        return
+  sendSlack(message, tokens) {
+    tokens.forEach(token => {
+      const option = {
+        url: 'https://slack.com/api/chat.postMessage',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=UTF-8',
+          Authorization: `Bearer ${token}`
+        },
+        json: { text: message, channel: '#general' }
       }
-      if (response && body) {
-        console.log('status Code:', response && response.statusCode)
-        console.log(body)
-      }
+      request(option, (error, response, body) => {
+        if (error) {
+          console.log('error:', error)
+          return
+        }
+        if (response && body) {
+          console.log('status Code:', response && response.statusCode)
+          console.log(body)
+        }
+      })
     })
   }
 }
