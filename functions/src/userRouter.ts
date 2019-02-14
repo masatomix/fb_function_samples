@@ -1,11 +1,7 @@
 import * as express from "express";
-import * as mysql from "promise-mysql";
-import config from "./config";
+import poolUtil from './poolUtil'
 
 const router = express.Router();
-
-let mysqlPool = mysql.createPool(config);
-// mysqlPool.query = util.promisify(mysqlPool.query);
 
 router
   // findAll
@@ -14,7 +10,7 @@ router
   .get("/", async (req, res) => {
     console.log("find all user start.");
     try {
-      const rows:any = await mysqlPool.query("select * from  USER_MASTER;");
+      const rows:any = await  poolUtil.getPool().query("select * from  USER_MASTER;");
       if (rows.length === 0) {
         res.status(404).send();
         return;
@@ -37,8 +33,8 @@ router
     console.log(JSON.stringify(user));
 
     try {
-      await mysqlPool.query("insert into USER_MASTER set ?", user);
-      const rows = await mysqlPool.query(
+      await  poolUtil.getPool().query("insert into USER_MASTER set ?", user);
+      const rows = await  poolUtil.getPool().query(
         "select * from  USER_MASTER where COMPANY_CD = ? and LOGIN_ID = ? ;",
         [user.COMPANY_CD, user.LOGIN_ID]
       );
@@ -62,7 +58,7 @@ router
     const loginId = user.LOGIN_ID;
     const userName = user.USER_NAME;
     try {
-      const rows = await mysqlPool.query(
+      const rows = await  poolUtil.getPool().query(
         "update USER_MASTER set COMPANY_CD = ? ,LOGIN_ID = ? ,USER_NAME = ? where COMPANY_CD = ? and LOGIN_ID = ?",
         [companyCode, loginId, userName, companyCode, loginId]
       );
@@ -82,7 +78,7 @@ router
 router.get("/:company_cd/:login_id", async (req, res) => {
   console.log("find by pk start.");
   try {
-    const rows:any = await mysqlPool.query(
+    const rows:any = await  poolUtil.getPool().query(
       "select * from  USER_MASTER where COMPANY_CD = ? and LOGIN_ID = ? ;",
       [req.params.company_cd, req.params.login_id]
     );
@@ -105,7 +101,7 @@ router.get("/:company_cd/:login_id", async (req, res) => {
 router.delete("/:company_cd/:login_id", async (req, res) => {
   console.log("delete user start.");
   try {
-    await mysqlPool.query(
+    await  poolUtil.getPool().query(
       "delete from  USER_MASTER where COMPANY_CD = ? and LOGIN_ID = ? ;",
       [req.params.company_cd, req.params.login_id]
     );

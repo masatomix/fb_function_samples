@@ -1,10 +1,9 @@
 import * as express from 'express'
 import * as request from 'request'
-import * as mysql from 'promise-mysql'
-import config from './config'
+import poolUtil from './poolUtil'
 import oauthConfig from './oauthConfig'
 
-let pool = mysql.createPool(config)
+// const pool = poolUtil.getPool()
 
 const router = express.Router()
 
@@ -105,7 +104,7 @@ error_description: ${req.query.error_description}
       slack_user_id: body.user_id
     }
 
-    const connection = await pool.getConnection()
+    const connection = await poolUtil.getPool().getConnection()
     try {
       await connection.beginTransaction()
       await connection.query(
@@ -134,7 +133,7 @@ error_description: ${req.query.error_description}
       connection.rollback()
       res.status(500).send(err)
     } finally {
-      pool.releaseConnection(connection)
+      poolUtil.getPool().releaseConnection(connection)
     }
     console.log(body)
   }
