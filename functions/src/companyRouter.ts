@@ -1,11 +1,12 @@
 import * as express from "express";
-import * as mysql from "promise-mysql";
+import poolUtil from './poolUtil'
 
-import config from "./config";
+
 
 const router = express.Router();
 
-let mysqlPool = mysql.createPool(config);
+// const mysqlPool = poolUtil.getPool()
+// let mysqlPool = mysql.createPool(config);
 
 
 router
@@ -15,7 +16,7 @@ router
   .get("/", async (req, res) => {
     console.log("find all");
     try {
-      const rows:any = await mysqlPool.query("select * from COMPANY_MASTER;");
+      const rows:any = await poolUtil.getPool().query("select * from COMPANY_MASTER;");
       if (rows.length === 0) {
         res.status(404).send();
         return;
@@ -36,8 +37,8 @@ router
     console.log(JSON.stringify(user));
 
     try {
-      await mysqlPool.query("insert into COMPANY_MASTER set ?", user);
-      const rows = await mysqlPool.query(
+      await poolUtil.getPool().query("insert into COMPANY_MASTER set ?", user);
+      const rows = await poolUtil.getPool().query(
         "select * from  COMPANY_MASTER where COMPANY_CD = ? ;",
         [user.COMPANY_CD]
       );
@@ -58,7 +59,7 @@ router
     const companyCode = user.COMPANY_CD;
     const userName = user.COMPANY_NAME;
     try {
-      const rows = await mysqlPool.query(
+      const rows = await poolUtil.getPool().query(
         "update COMPANY_MASTER set COMPANY_CD = ? ,COMPANY_NAME = ? where COMPANY_CD = ?",
         [companyCode, userName, companyCode]
       );
@@ -76,7 +77,7 @@ router
 router.get("/:company_cd/", async (req, res) => {
   console.log("find by pk");
   try {
-    const rows:any = await mysqlPool.query(
+    const rows:any = await poolUtil.getPool().query(
       "select * from  COMPANY_MASTER where COMPANY_CD = ?",
       [req.params.company_cd]
     );
@@ -97,7 +98,7 @@ router.get("/:company_cd/", async (req, res) => {
 router.delete("/:company_cd/", async (req, res) => {
   console.log("delete");
   try {
-    await mysqlPool.query(
+    await poolUtil.getPool().query(
       "delete from  COMPANY_MASTER where COMPANY_CD = ?",
       [req.params.company_cd]
     );

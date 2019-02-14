@@ -1,12 +1,8 @@
 import * as request from 'request'
-import * as mysql from 'promise-mysql'
-import config from './config'
-import slackConfig from './slackConfig'
+import poolUtil from './poolUtil'
 import * as moment from 'moment-timezone'
 
 // import * as fs from 'fs'
-
-let pool = mysql.createPool(config)
 
 const excludeList = ['日高本線', '室蘭本線', '呉線', '芸備線'] // いつも遅延してる？ぽいので、まあ除外しちゃう
 
@@ -21,8 +17,8 @@ const me = {
       method: 'GET',
       json: true
     }
-    const body: any = await _utils.doRequest(option)
-    let connection = await pool.getConnection()
+    const body: any = await _internal.doRequest(option)
+    let connection = await poolUtil.getPool().getConnection()
     await connection.beginTransaction()
     try {
       // 前テーブル全消し
@@ -65,7 +61,7 @@ const me = {
       connection.rollback()
     } finally {
       console.log('create rail_detail_insert end.')
-      pool.releaseConnection(connection)
+      poolUtil.getPool().releaseConnection(connection)
     }
   },
 
@@ -74,24 +70,100 @@ const me = {
    */
   async rail_check() {
     //  探してきて、差分があったら、通知する。
-    const rail_infos_prev = await _utils.getDataFromTable('DELAY_RAIL_PREV')
-    const rail_infos = await _utils.getDataFromTable('DELAY_RAIL_NEW')
+    const rail_infos_prev = await _internal.getDataFromTable('DELAY_RAIL_PREV') //DELAY_RAIL_PREV
+    const rail_infos = await _internal.getDataFromTable('DELAY_RAIL_NEW')
 
     // const rail_infos = JSON.parse(fs.readFileSync('new.json', 'utf8'))
     // const rail_infos_prev = JSON.parse(fs.readFileSync('prev.json', 'utf8'))
 
-    if (_utils.equals(rail_infos, rail_infos_prev)) {
-      console.log('差分ナシ!')
-    } else {
-      console.log('差分アリ!')
-      const message = this.createMessage(rail_infos)
-      console.log(message)
-      this.sendSlack(message)
+    // token のフィールド
+    //   slack_user_id
+    //   user_id
+    //   access_token
+    //   body
+    const tokens: Array<any> = await _internal.getTokens()
+
+    // user_rail のフィールド
+    //   user_id
+    //   rail_name
+    const user_rails: Array<any> = await _internal.getDataFromTable('USER_RAIL')
+
+    console.log(JSON.stringify(user_rails))
+
+    // 登録されたトークンごとに、繰り返し処理
+    tokens.forEach(token => {
+      // tokenのユーザIDでフィルタして路線名の配列を作成
+      const user_rails_per_user = user_rails.filter(
+        user_rail => user_rail.user_id === token.user_id
+      )
+
+      // DELAY_RAIL_NEW のレコードに対して、
+      const f_rail_infos = rail_infos.filter(rail_info =>
+        user_rails_per_user.some(
+          user_rail_per_user => user_rail_per_user.rail_name === rail_info.name
+        )
+      )
+      const f_rail_infos_prev = rail_infos_prev.filter(rail_info =>
+        user_rails_per_user.some(
+          user_rail_per_user => user_rail_per_user.rail_name === rail_info.name
+        )
+      )
+      // console.log('--')
+      // console.log(JSON.stringify(f_rail_infos))
+      // console.log('--')
+      // console.log(JSON.stringify(f_rail_infos_prev))
+      // console.log('--')
+
+      if (_internal.equals(f_rail_infos, f_rail_infos_prev)) {
+        console.log('差分ナシ!')
+      } else {
+        console.log('差分アリ!')
+
+        _internal.sendSlack(f_rail_infos, token)
+      }
+    })
+  }
+}
+
+/**
+ * ココでつかうUtilsを集めたメソッド。exportしないので外からつかえない(でイイんだよね)。。
+ */
+const _internal = {
+  async getTokens() {
+    let tokens = []
+    let connection = await poolUtil.getPool().getConnection()
+    try {
+      const sql = `select
+        access_token.user_id as slack_user_id,
+        USER_SLACKUSER.user_id ,
+        access_token.access_token,
+        access_token.body
+      from access_token left join  USER_SLACKUSER
+      on
+        access_token.user_id = USER_SLACKUSER.slack_user_id
+      `
+      tokens = await connection.query(
+        sql
+        // 'select access_token,body from access_token'
+      )
+
+      // tokens = rows.map(row=>row.access_token)
+    } catch (err) {
+      console.log('err: ' + err)
     }
+    return tokens
   },
 
-  createMessage(rail_infos: Array<any>) {
-    // rail_infos の要素を文字列化して、連結する
+  /**
+   * 前回DBと差分があり、メッセージを送信する事になった際に呼ばれるメソッド。
+   * ・token2Rosens で、ユーザが送信してほしい路線一覧を取得する。
+   * ・rail_infos にその路線が入っていたら、その行は挿入する。入ってなければ、その行は挿入しない
+   * ・結果どの路線も挿入しない場合もありえる。
+   * ただし、そもそも rail_infos がゼロ件のばあいは、、、とか結構制御がむずかしい。。
+   * @param rail_infos
+   * @param token
+   */
+  createMessage(rail_infos: Array<any>, token) {
     const internal_message = rail_infos
       .map(element => {
         const lastupdateStr = moment(element.lastupdate_gmt * 1000)
@@ -106,9 +178,9 @@ const me = {
     const nowStr = now.tz('Asia/Tokyo').format('YYYY/MM/DD HH:mm')
 
     const message = `電車運行情報 ${nowStr} 時点
-
 ${internal_message}
 
+(${rail_infos.length} 件)
 (カッコは更新時刻)
 https://www.tetsudo.com/traffic/
 https://rti-giken.jp/fhc/api/train_tetsudo/
@@ -116,14 +188,20 @@ https://rti-giken.jp/fhc/api/train_tetsudo/
     return message
   },
 
-  sendSlack(message) {
+  sendSlack(rail_infos, token) {
+    const message = this.createMessage(rail_infos, token)
+    console.log(message)
     const option = {
-      url: slackConfig.url,
+      url: JSON.parse(token.body).incoming_webhook.url,
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json; charset=UTF-8',
+        Authorization: `Bearer ${token.access_token}`
       },
-      json: { text: message, channel: '#rail_info' }
+      json: {
+        text: message,
+        channel: JSON.parse(token.body).incoming_webhook.channel
+      }
     }
     request(option, (error, response, body) => {
       if (error) {
@@ -135,13 +213,8 @@ https://rti-giken.jp/fhc/api/train_tetsudo/
         console.log(body)
       }
     })
-  }
-}
+  },
 
-/**
- * ココでつかうUtilsを集めたメソッド。exportしないので外からつかえない(でイイんだよね)。。
- */
-const _utils = {
   /**
    * 配列どうしの長さや中身の項目が一致していたらtrue/そうでなければfalse
    * @param rail_infos
@@ -203,14 +276,14 @@ const _utils = {
   },
 
   async getDataFromTable(tableName) {
-    let connection = await pool.getConnection()
+    let connection = await poolUtil.getPool().getConnection()
     try {
       return await connection.query('select * from ' + tableName)
     } catch (err) {
       console.log('err: ' + err)
     } finally {
       console.log('create getDataFromTable end.')
-      pool.releaseConnection(connection)
+      poolUtil.getPool().releaseConnection(connection)
     }
   },
 
