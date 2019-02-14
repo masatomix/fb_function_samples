@@ -89,7 +89,7 @@ error_description: ${req.query.error_description}
       form: formParams,
       json: true
     }
-
+    // 別テーブルにすべきだ。
     const body: any = await doRequest(options)
     const instance = {
       auth_user_id: fbUser,
@@ -110,12 +110,13 @@ error_description: ${req.query.error_description}
       )
       await connection.query('insert into access_token set ?', instance)
 
-      const rows = await connection.query(
-        'select * from  access_token where auth_user_id = ? ',
-        [fbUser]
-      )
+      // const rows = await connection.query(
+      //   'select * from  access_token where auth_user_id = ? ',
+      //   [fbUser]
+      // )
       connection.commit()
-      res.status(201).json(rows[0])
+      // res.status(201).json(rows[0])
+      res.send('登録完了。ブラウザ閉じちゃってください。')
     } catch (err) {
       console.log('err: ' + err)
       connection.rollback()

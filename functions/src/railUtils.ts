@@ -95,10 +95,10 @@ const me = {
     let tokens = []
     let connection = await pool.getConnection()
     try {
-      const rows = await connection.query(
-        'select access_token from access_token'
+      tokens = await connection.query(
+        'select access_token,body from access_token'
       )
-      tokens = rows.map(row=>row.access_token)
+      // tokens = rows.map(row=>row.access_token)
     } catch (err) {
       console.log('err: ' + err)
     }
@@ -133,14 +133,15 @@ https://rti-giken.jp/fhc/api/train_tetsudo/
 
   sendSlack(message, tokens) {
     tokens.forEach(token => {
+      // console.log(JSON.parse(token.body).incoming_webhook.channel)
       const option = {
-        url: 'https://slack.com/api/chat.postMessage',
+        url: JSON.parse(token.body).incoming_webhook.url,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json; charset=UTF-8',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token.access_token}`
         },
-        json: { text: message, channel: '#general' }
+        json: { text: message, channel:  JSON.parse(token.body).incoming_webhook.channel}
       }
       request(option, (error, response, body) => {
         if (error) {
