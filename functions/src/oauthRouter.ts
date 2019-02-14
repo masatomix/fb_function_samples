@@ -70,8 +70,6 @@ error_description: ${req.query.error_description}
   } else {
     checkCSRF(req, res)
 
-    const fbUser = req.cookies.user
-
     const formParams = {
       redirect_uri: oauthConfig.redirect_uri,
       client_id: oauthConfig.client_id,
@@ -91,8 +89,8 @@ error_description: ${req.query.error_description}
     }
     // 別テーブルにすべきだ。
     const body: any = await doRequest(options)
+
     const instance = {
-      auth_user_id: fbUser,
       team_id: body.team_id,
       user_id: body.user_id,
       scope: body.scope,
@@ -101,12 +99,26 @@ error_description: ${req.query.error_description}
       body: JSON.stringify(body)
     }
 
+    const fbUser = req.cookies.user
+    const user_slack_user = {
+      user_id: fbUser,
+      slack_user_id: body.user_id
+    }
+
     const connection = await pool.getConnection()
     try {
       await connection.beginTransaction()
       await connection.query(
-        'delete from  access_token where auth_user_id = ? ',
-        [fbUser]
+        'delete from  access_token where team_id = ? and user_id = ? ',
+        [body.team_id, body.user_id]
+      )
+      await connection.query('delete from  USER_SLACKUSER where user_id = ? ', [
+        fbUser
+      ])
+
+      await connection.query(
+        'insert into USER_SLACKUSER set ?',
+        user_slack_user
       )
       await connection.query('insert into access_token set ?', instance)
 
