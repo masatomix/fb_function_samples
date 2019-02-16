@@ -5,5 +5,5 @@ export default {
   token_endpoint: 'https://slack.com/api/oauth.access',
   redirect_uri:
     'xxx',
-    scope: 'incoming-webhook'
+  scope: 'incoming-webhook'
 }

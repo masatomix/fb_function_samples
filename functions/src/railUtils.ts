@@ -88,7 +88,7 @@ const me = {
     //   rail_name
     const user_rails: Array<any> = await _internal.getDataFromTable('USER_RAIL')
 
-    console.log(JSON.stringify(user_rails))
+    // console.log(JSON.stringify(user_rails))
 
     // 登録されたトークンごとに、繰り返し処理
     tokens.forEach(token => {
@@ -115,11 +115,16 @@ const me = {
       // console.log('--')
 
       if (_internal.equals(f_rail_infos, f_rail_infos_prev)) {
-        console.log('差分ナシ!')
+        console.log('差分ナシ! for ', token.user_id)
       } else {
-        console.log('差分アリ!')
+        console.log('差分アリ! for ', token.user_id)
 
         _internal.sendSlack(f_rail_infos, token)
+
+        _internal.insert_data('send_log', {
+          dest_user: token.user_id,
+          message: JSON.stringify(f_rail_infos)
+        })
       }
     })
   }
@@ -180,7 +185,6 @@ const _internal = {
     const message = `電車運行情報 ${nowStr} 時点
 ${internal_message}
 
-(${rail_infos.length} 件)
 (カッコは更新時刻)
 https://www.tetsudo.com/traffic/
 https://rti-giken.jp/fhc/api/train_tetsudo/
@@ -297,6 +301,23 @@ https://rti-giken.jp/fhc/api/train_tetsudo/
         }
       })
     })
+  },
+
+  async insert_data(tableName, obj) {
+    console.log(JSON.stringify(obj))
+    console.log('send log start.')
+    let connection = await poolUtil.getPool().getConnection()
+    await connection.beginTransaction()
+    try {
+      await connection.query('insert into ' + tableName + ' set ?', obj)
+      connection.commit()
+    } catch (err) {
+      console.log('err: ' + err)
+      connection.rollback()
+    } finally {
+      console.log('send log end.')
+      poolUtil.getPool().releaseConnection(connection)
+    }
   }
 }
 
