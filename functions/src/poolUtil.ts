@@ -14,7 +14,7 @@ let pool
 export default {
   getPool() {
     if (!pool) {
-      console.log('config: ', JSON.stringify(mysqlConfig))
+      // console.log('config: ', JSON.stringify(mysqlConfig))
       pool = mysql.createPool(mysqlConfig)
     }
     return pool
